@@ -1,0 +1,63 @@
+.verify
+
+# ==========================================
+# macOS 系统文件
+# ==========================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# ==========================================
+# Xcode 构建产物与临时文件
+# ==========================================
+build/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ==========================================
+# Xcode 个人配置（包含断点、打开的文件等个人习惯，不应提交）
+# ==========================================
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# ==========================================
+# Swift Package Manager (SPM) 依赖
+# ==========================================
+.build/
+.swiftpm/
+
+# ==========================================
+# CocoaPods 依赖（根据团队习惯决定是否忽略 Pods/）
+# ==========================================
+Pods/
+# 如果不希望提交 Pods 源码，取消上面一行的注释
+
+# ==========================================
+# Carthage 依赖
+# ==========================================
+Carthage/Build/
+
+# ==========================================
+# Fastlane
+# ==========================================
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
