@@ -1,5 +1,7 @@
 # JasPlayer
 
+![logo](image-1.png)
+
 JasPlayer is a native listening app for iPhone, iPad, and Mac. It is designed for repeated language listening with local audio, saved position, playback speed, and A–B looping. Each device keeps its own library; use a backup file to move lessons between devices.
 
 ## Open the native app
