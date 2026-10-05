@@ -12,6 +12,11 @@ final class Lesson {
     var lastPlayedAt: Date?
     var lastPosition: Double
 
+    /// Playlist placements of this lesson. Deleting a lesson also removes its
+    /// playlist entries so a playlist never keeps a dangling row.
+    @Relationship(deleteRule: .cascade, inverse: \PlaylistItem.lesson)
+    var playlistItems: [PlaylistItem] = []
+
     init(
         id: UUID = UUID(),
         title: String,

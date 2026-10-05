@@ -1,4 +1,4 @@
-# JasPlayer — Native Listening App
+# JasListen — Native Listening App
 
 ## Goal and platform scope
 
@@ -13,6 +13,8 @@ Build a native listening-practice app for iPhone, iPad, and Mac. The first relea
 ### UI and application layer
 
 - Use adaptive SwiftUI views: a compact lesson list/player flow on iPhone and a library sidebar with player detail on Mac.
+- Adding audio accepts one file, several files at once, or a folder that is searched recursively for audio. On Mac the same sources can also be dragged onto the library.
+- On Mac, the space bar plays or pauses the loaded lesson and the left and right arrow keys move back and forward. Text fields, sheets, and open panels keep their own keys.
 - Keep user-interface code separate from playback and storage logic.
 - Expose shared app interfaces: `LessonRepository` for course metadata/progress, `AudioPlaybackController` for transport and repeat state, and `BackupService` for archive import/export.
 
@@ -58,6 +60,11 @@ Transcripts, bookmarks, practice queues, and automatic transcription remain late
 
 - Unit-test A–B range validation and legacy web backup decoding.
 - Test import/export round trips, ID collisions, malformed or unsafe archives, unsupported audio, and file/database failure rollback.
+- Test that a folder is searched recursively, that several files and folders in one selection keep their audio and report the rest, and that lesson titles come from file names.
 - On iPhone, verify MP3 playback, speed, seek, A–B repetition, saved position, background playback, lock-screen commands, and headset play/pause/seek.
+- Verify playlists can switch between manual, name, and recently-added ordering, and that playlist playback opens the full player with the active queue visible, advances in the selected order with wraparound, and resets completed lesson progress.
+- On iPhone, verify playlist creation, renaming, switching, playback on selection, and volume adjustment.
+- Verify the player and playlist views use the available iPhone screen with compact controls and system-adaptive backgrounds.
 - On Mac, verify MP3 import/playback, speed, seek, A–B repetition, saved position, backup creation, and restore.
+- On Mac, verify adding several files at once, adding a folder (including nested folders), dropping files or a folder onto the library, and that space, ←, and → drive transport while a text field or sheet keeps its own keys (PLANS.md line 16).
 - Retire the web player only after both native targets pass acceptance and an exported web v1 backup imports successfully.

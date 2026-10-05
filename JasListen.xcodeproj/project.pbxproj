@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		100000000000000000000001 /* JasPlayerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* JasPlayerApp.swift */; };
+		100000000000000000000001 /* JasListenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* JasListenApp.swift */; };
 		100000000000000000000002 /* Lesson.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* Lesson.swift */; };
 		100000000000000000000003 /* LessonRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* LessonRepository.swift */; };
 		100000000000000000000004 /* AudioImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* AudioImportService.swift */; };
@@ -16,10 +16,15 @@
 		100000000000000000000007 /* BackupDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* BackupDocument.swift */; };
 		100000000000000000000008 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* LibraryView.swift */; };
 		100000000000000000000009 /* PlayerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* PlayerDetailView.swift */; };
-		10000000000000000000000A /* JasPlayerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* JasPlayerTests.swift */; };
+		10000000000000000000000A /* JasListenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* JasListenTests.swift */; };
 		10000000000000000000000B /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 800000000000000000000001 /* ZIPFoundation */; };
 		10000000000000000000000C /* BackupFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* BackupFormat.swift */; };
 		10000000000000000000000D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 800000000000000000000002 /* ZIPFoundation */; };
+		10000000000000000000000E /* MacPlaybackKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* MacPlaybackKeys.swift */; };
+		10000000000000000000000F /* Playlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000D /* Playlist.swift */; };
+		100000000000000000000010 /* PlaylistRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* PlaylistRepository.swift */; };
+		100000000000000000000011 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* PlaylistDetailView.swift */; };
+		100000000000000000000012 /* logo.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000013 /* logo.jpg */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,12 +33,12 @@
 			containerPortal = 400000000000000000000001 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 600000000000000000000002;
-			remoteInfo = JasPlayer;
+			remoteInfo = JasListen;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		200000000000000000000001 /* JasPlayerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JasPlayerApp.swift; sourceTree = "<group>"; };
+		200000000000000000000001 /* JasListenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JasListenApp.swift; sourceTree = "<group>"; };
 		200000000000000000000002 /* Lesson.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lesson.swift; sourceTree = "<group>"; };
 		200000000000000000000003 /* LessonRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonRepository.swift; sourceTree = "<group>"; };
 		200000000000000000000004 /* AudioImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioImportService.swift; sourceTree = "<group>"; };
@@ -44,9 +49,14 @@
 		200000000000000000000009 /* PlayerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerDetailView.swift; sourceTree = "<group>"; };
 		20000000000000000000000A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20000000000000000000000B /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
-		200000000000000000000010 /* JasPlayerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JasPlayerTests.swift; sourceTree = "<group>"; };
-		200000000000000000000011 /* JasPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JasPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		200000000000000000000012 /* JasPlayerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JasPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		20000000000000000000000C /* MacPlaybackKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacPlaybackKeys.swift; sourceTree = "<group>"; };
+		20000000000000000000000D /* Playlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playlist.swift; sourceTree = "<group>"; };
+		20000000000000000000000E /* PlaylistRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistRepository.swift; sourceTree = "<group>"; };
+		20000000000000000000000F /* PlaylistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistDetailView.swift; sourceTree = "<group>"; };
+		200000000000000000000010 /* JasListenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JasListenTests.swift; sourceTree = "<group>"; };
+		200000000000000000000011 /* JasListen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JasListen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000012 /* JasListenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JasListenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000013 /* logo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = logo.jpg; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,37 +82,38 @@
 		700000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				700000000000000000000002 /* JasPlayer */,
-				700000000000000000000003 /* JasPlayerTests */,
+				700000000000000000000002 /* JasListen */,
+				700000000000000000000003 /* JasListenTests */,
 				700000000000000000000004 /* Products */,
+				200000000000000000000013 /* logo.jpg */,
 			);
 			sourceTree = "<group>";
 		};
-		700000000000000000000002 /* JasPlayer */ = {
+		700000000000000000000002 /* JasListen */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000001 /* JasPlayerApp.swift */,
+				200000000000000000000001 /* JasListenApp.swift */,
 				700000000000000000000005 /* Models */,
 				700000000000000000000006 /* Services */,
 				700000000000000000000007 /* Views */,
 				20000000000000000000000A /* Info.plist */,
 			);
-			path = JasPlayer;
+			path = JasListen;
 			sourceTree = "<group>";
 		};
-		700000000000000000000003 /* JasPlayerTests */ = {
+		700000000000000000000003 /* JasListenTests */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000010 /* JasPlayerTests.swift */,
+				200000000000000000000010 /* JasListenTests.swift */,
 			);
-			path = JasPlayerTests;
+			path = JasListenTests;
 			sourceTree = "<group>";
 		};
 		700000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000011 /* JasPlayer.app */,
-				200000000000000000000012 /* JasPlayerTests.xctest */,
+				200000000000000000000011 /* JasListen.app */,
+				200000000000000000000012 /* JasListenTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -111,6 +122,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000002 /* Lesson.swift */,
+				20000000000000000000000D /* Playlist.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -119,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000003 /* LessonRepository.swift */,
+				20000000000000000000000E /* PlaylistRepository.swift */,
 				200000000000000000000004 /* AudioImportService.swift */,
 				200000000000000000000005 /* AudioPlaybackController.swift */,
 				200000000000000000000006 /* BackupService.swift */,
@@ -133,6 +146,8 @@
 				200000000000000000000007 /* BackupDocument.swift */,
 				200000000000000000000008 /* LibraryView.swift */,
 				200000000000000000000009 /* PlayerDetailView.swift */,
+				20000000000000000000000F /* PlaylistDetailView.swift */,
+				20000000000000000000000C /* MacPlaybackKeys.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -140,9 +155,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		600000000000000000000001 /* JasPlayer */ = {
+		600000000000000000000001 /* JasListen */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A00000000000000000000001 /* Build configuration list for PBXNativeTarget "JasPlayer" */;
+			buildConfigurationList = A00000000000000000000001 /* Build configuration list for PBXNativeTarget "JasListen" */;
 			buildPhases = (
 				900000000000000000000001 /* Sources */,
 				500000000000000000000001 /* Frameworks */,
@@ -152,17 +167,17 @@
 			);
 			dependencies = (
 			);
-			name = JasPlayer;
+			name = JasListen;
 			packageProductDependencies = (
 				800000000000000000000001 /* ZIPFoundation */,
 			);
-			productName = JasPlayer;
-			productReference = 200000000000000000000011 /* JasPlayer.app */;
+			productName = JasListen;
+			productReference = 200000000000000000000011 /* JasListen.app */;
 			productType = "com.apple.product-type.application";
 		};
-		600000000000000000000002 /* JasPlayerTests */ = {
+		600000000000000000000002 /* JasListenTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A00000000000000000000002 /* Build configuration list for PBXNativeTarget "JasPlayerTests" */;
+			buildConfigurationList = A00000000000000000000002 /* Build configuration list for PBXNativeTarget "JasListenTests" */;
 			buildPhases = (
 				900000000000000000000003 /* Sources */,
 				500000000000000000000002 /* Frameworks */,
@@ -173,12 +188,12 @@
 			dependencies = (
 				D00000000000000000000001 /* PBXTargetDependency */,
 			);
-			name = JasPlayerTests;
+			name = JasListenTests;
 			packageProductDependencies = (
 				800000000000000000000002 /* ZIPFoundation */,
 			);
-			productName = JasPlayerTests;
-			productReference = 200000000000000000000012 /* JasPlayerTests.xctest */;
+			productName = JasListenTests;
+			productReference = 200000000000000000000012 /* JasListenTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -199,7 +214,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A00000000000000000000003 /* Build configuration list for PBXProject "JasPlayer" */;
+			buildConfigurationList = A00000000000000000000003 /* Build configuration list for PBXProject "JasListen" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -215,8 +230,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				600000000000000000000001 /* JasPlayer */,
-				600000000000000000000002 /* JasPlayerTests */,
+				600000000000000000000001 /* JasListen */,
+				600000000000000000000002 /* JasListenTests */,
 			);
 		};
 /* End PBXProject section */
@@ -226,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				100000000000000000000012 /* logo.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -243,7 +259,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				100000000000000000000001 /* JasPlayerApp.swift in Sources */,
+				100000000000000000000001 /* JasListenApp.swift in Sources */,
 				100000000000000000000002 /* Lesson.swift in Sources */,
 				100000000000000000000003 /* LessonRepository.swift in Sources */,
 				100000000000000000000004 /* AudioImportService.swift in Sources */,
@@ -253,6 +269,10 @@
 				100000000000000000000007 /* BackupDocument.swift in Sources */,
 				100000000000000000000008 /* LibraryView.swift in Sources */,
 				100000000000000000000009 /* PlayerDetailView.swift in Sources */,
+				10000000000000000000000E /* MacPlaybackKeys.swift in Sources */,
+				10000000000000000000000F /* Playlist.swift in Sources */,
+				100000000000000000000010 /* PlaylistRepository.swift in Sources */,
+				100000000000000000000011 /* PlaylistDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -260,7 +280,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				10000000000000000000000A /* JasPlayerTests.swift in Sources */,
+				10000000000000000000000A /* JasListenTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,7 +289,7 @@
 /* Begin PBXTargetDependency section */
 		D00000000000000000000001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 600000000000000000000002 /* JasPlayerTests */;
+			target = 600000000000000000000002 /* JasListenTests */;
 			targetProxy = 300000000000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -302,16 +322,19 @@
 		A10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZX49MLHU3Q;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = JasPlayer/Info.plist;
+				INFOPLIST_FILE = JasListen/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jaslistening.still;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaslisten;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -324,14 +347,17 @@
 		A10000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZX49MLHU3Q;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = JasPlayer/Info.plist;
+				INFOPLIST_FILE = JasListen/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jaslistening.still;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaslisten;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -356,7 +382,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JasPlayer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JasPlayer";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JasListen.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JasListen";
 			};
 			name = Debug;
 		};
@@ -374,14 +400,14 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JasPlayer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JasPlayer";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JasListen.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JasListen";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A00000000000000000000001 /* Build configuration list for PBXNativeTarget "JasPlayer" */ = {
+		A00000000000000000000001 /* Build configuration list for PBXNativeTarget "JasListen" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000003 /* Debug */,
@@ -390,7 +416,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A00000000000000000000002 /* Build configuration list for PBXNativeTarget "JasPlayerTests" */ = {
+		A00000000000000000000002 /* Build configuration list for PBXNativeTarget "JasListenTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000005 /* Debug */,
@@ -399,7 +425,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A00000000000000000000003 /* Build configuration list for PBXProject "JasPlayer" */ = {
+		A00000000000000000000003 /* Build configuration list for PBXProject "JasListen" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000001 /* Debug */,

@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 import Testing
 import ZIPFoundation
-@testable import JasPlayer
+@testable import JasListen
 
 /// Acceptance coverage for PLANS.md: A–B range validation, legacy web backup
 /// decoding, native import/export round trips, ID collisions, malformed or
@@ -48,7 +48,7 @@ struct BackupAcceptanceTests {
 
     static func makeWorkingDirectory(_ name: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("JasPlayerTests-\(name)-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("JasListenTests-\(name)-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -64,7 +64,7 @@ struct BackupAcceptanceTests {
     @MainActor
     static func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
-            for: Lesson.self,
+            for: Lesson.self, Playlist.self, PlaylistItem.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         return ModelContext(container)
@@ -230,6 +230,70 @@ struct BackupAcceptanceTests {
         #expect(controller.playbackRate == 1)
     }
 
+    @Test func playbackQueueAdvancesAndWrapsToItsFirstLesson() {
+        let firstID = UUID()
+        let secondID = UUID()
+        let thirdID = UUID()
+        let queue = [firstID, secondID, thirdID]
+
+        #expect(PlaybackQueue.nextID(after: firstID, in: queue) == secondID)
+        #expect(PlaybackQueue.nextID(after: secondID, in: queue) == thirdID)
+        #expect(PlaybackQueue.nextID(after: thirdID, in: queue) == firstID)
+        #expect(PlaybackQueue.nextID(after: UUID(), in: queue) == nil)
+        #expect(PlaybackQueue.nextID(after: firstID, in: []) == nil)
+    }
+
+    @MainActor
+    @Test func playlistSortModesUseManualNameAndAddedDateOrder() throws {
+        let context = try Self.makeContext()
+        let alpha = Lesson(title: "Alpha", relativeAudioPath: "alpha.wav", audioType: "audio/wav", duration: 1)
+        let zulu = Lesson(title: "Zulu", relativeAudioPath: "zulu.wav", audioType: "audio/wav", duration: 1)
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        let zuluItem = PlaylistItem(position: 0, addedAt: newer, lesson: zulu)
+        let alphaItem = PlaylistItem(position: 1, addedAt: older, lesson: alpha)
+        context.insert(alpha)
+        context.insert(zulu)
+        context.insert(zuluItem)
+        context.insert(alphaItem)
+        let items = [zuluItem, alphaItem]
+
+        #expect(PlaylistOrdering.sorted(items, by: .manual).map { $0.lesson?.title } == ["Zulu", "Alpha"])
+        #expect(PlaylistOrdering.sorted(items, by: .name).map { $0.lesson?.title } == ["Alpha", "Zulu"])
+        #expect(PlaylistOrdering.sorted(items, by: .recentlyAdded).map { $0.lesson?.title } == ["Zulu", "Alpha"])
+    }
+
+    @MainActor
+    @Test func playbackVolumeStaysWithinItsSupportedRange() {
+        let controller = AudioPlaybackController()
+        controller.setVolume(-0.5)
+        #expect(controller.volume == 0)
+        controller.setVolume(0.4)
+        #expect(controller.volume == 0.4)
+        controller.setVolume(1.5)
+        #expect(controller.volume == 1)
+    }
+
+    @MainActor
+    @Test func playlistRepositoryCreatesRenamesAndAddsLessonsOnce() throws {
+        let context = try Self.makeContext()
+        let first = Lesson(title: "First", relativeAudioPath: "first.wav", audioType: "audio/wav", duration: 1)
+        let second = Lesson(title: "Second", relativeAudioPath: "second.wav", audioType: "audio/wav", duration: 2)
+        context.insert(first)
+        context.insert(second)
+
+        let repository = SwiftDataPlaylistRepository(context: context)
+        let playlist = try repository.create(named: "  Course  ")
+        let insertedCount = try repository.add([first, second, first], to: playlist)
+
+        #expect(playlist.name == "Course")
+        #expect(insertedCount == 2)
+        #expect(playlist.orderedLessons.map(\.title) == ["First", "Second"])
+
+        try repository.rename(playlist, to: "  Finnish  ")
+        #expect(playlist.name == "Finnish")
+    }
+
     @MainActor
     @Test func seekClampsToTheLoadedDuration() throws {
         let working = try Self.makeWorkingDirectory("seek")
@@ -335,6 +399,89 @@ struct BackupAcceptanceTests {
         }
         #expect(try context.fetch(FetchDescriptor<Lesson>()).isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: library.path).isEmpty)
+    }
+
+    // MARK: - Adding a folder or several files (PLANS.md line 63)
+
+    @Test func selectingAFolderCollectsItsAudioRecursively() throws {
+        let working = try Self.makeWorkingDirectory("folder")
+        let folder = working.appendingPathComponent("course", isDirectory: true)
+        let nested = folder.appendingPathComponent("unit 2", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        _ = try Self.writeWAV(to: folder.appendingPathComponent("01-intro.wav"))
+        _ = try Self.writeWAV(to: nested.appendingPathComponent("02-story.wav"))
+        let notes = folder.appendingPathComponent("notes.txt")
+        try Data("notes".utf8).write(to: notes)
+        try Data("hidden".utf8).write(to: folder.appendingPathComponent(".hidden.wav"))
+
+        let selection = AudioImportService.collectAudioFiles(from: [folder, notes])
+        #expect(selection.audioFiles.map(\.lastPathComponent) == ["01-intro.wav", "02-story.wav"])
+        #expect(selection.folderCount == 1)
+        #expect(
+            selection.skippedCount == 1,
+            "a picked non-audio file is reported; notes and hidden files inside the folder are simply not offered"
+        )
+    }
+
+    @Test func selectingSeveralFilesKeepsAudioAndSkipsTheRest() throws {
+        let working = try Self.makeWorkingDirectory("multi")
+        let first = try Self.writeWAV(to: working.appendingPathComponent("first.wav"))
+        let second = try Self.writeWAV(to: working.appendingPathComponent("second.wav"))
+        let notes = working.appendingPathComponent("notes.txt")
+        try Data("notes".utf8).write(to: notes)
+
+        let selection = AudioImportService.collectAudioFiles(from: [first, notes, second, first])
+        #expect(selection.audioFiles == [first, second], "duplicates are dropped")
+        #expect(selection.folderCount == 0)
+        #expect(selection.skippedCount == 1)
+    }
+
+    @Test func selectingAFolderWithoutAudioReportsNothingToAdd() throws {
+        let working = try Self.makeWorkingDirectory("empty-folder")
+        let folder = working.appendingPathComponent("empty", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("notes".utf8).write(to: folder.appendingPathComponent("readme.txt"))
+
+        let selection = AudioImportService.collectAudioFiles(from: [folder])
+        #expect(selection.isEmpty)
+        #expect(selection.folderCount == 1)
+        #expect(selection.skippedCount == 1)
+    }
+
+    @Test func suggestedTitleAndAudioValidationFollowTheFile() {
+        #expect(AudioImportService.suggestedTitle(for: URL(fileURLWithPath: "/tmp/Lesson_01.mp3")) == "Lesson 01")
+        #expect(AudioImportService.suggestedTitle(for: URL(fileURLWithPath: "/tmp/  spaced  .m4a")) == "spaced")
+        #expect(AudioImportService.suggestedTitle(for: URL(fileURLWithPath: "/tmp/Plain.wav")) == "Plain")
+        #expect(AudioImportService.isAudioFile(URL(fileURLWithPath: "/tmp/Plain.MP3")))
+        #expect(!AudioImportService.isAudioFile(URL(fileURLWithPath: "/tmp/notes.txt")))
+        #expect(!AudioImportService.isAudioFile(URL(fileURLWithPath: "/tmp/no-extension")))
+    }
+
+    /// The whole folder flow: collect what the picker returned, then import it.
+    @MainActor
+    @Test func everyFileCollectedFromAFolderImports() async throws {
+        let working = try Self.makeWorkingDirectory("folder-import")
+        let library = try Self.makeLibrary(in: working)
+        let folder = working.appendingPathComponent("course", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        _ = try Self.writeWAV(to: folder.appendingPathComponent("Lesson_01.wav"))
+        _ = try Self.writeWAV(to: folder.appendingPathComponent("Lesson_02.wav"))
+        let context = try Self.makeContext()
+
+        let selection = AudioImportService.collectAudioFiles(from: [folder])
+        #expect(selection.audioFiles.count == 2)
+        for url in selection.audioFiles {
+            _ = try await AudioImportService.importAudio(
+                from: url,
+                title: AudioImportService.suggestedTitle(for: url),
+                context: context,
+                audioDirectory: library
+            )
+        }
+
+        let lessons = try context.fetch(FetchDescriptor<Lesson>(sortBy: [SortDescriptor(\.title)]))
+        #expect(lessons.map(\.title) == ["Lesson 01", "Lesson 02"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: library.path).count == 2)
     }
 
     // MARK: - Legacy web backup decoding (PLANS.md lines 38, 59)

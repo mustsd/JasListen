@@ -24,7 +24,7 @@ struct BackupDocument: FileDocument, @unchecked Sendable {
         }
         openedContents = contents
         backupURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("JasPlayerOpened-\(UUID().uuidString).stillbackup")
+            .appendingPathComponent("JasListenOpened-\(UUID().uuidString).stillbackup")
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {

@@ -24,7 +24,7 @@ enum BackupService {
         let records = lessons.map(SourceLesson.init)
         return try await Task.detached(priority: .userInitiated) {
             let staging = fileManager.temporaryDirectory
-                .appendingPathComponent("JasPlayerBackup-\(UUID().uuidString)", isDirectory: true)
+                .appendingPathComponent("JasListenBackup-\(UUID().uuidString)", isDirectory: true)
             let audio = staging.appendingPathComponent("Audio", isDirectory: true)
             try fileManager.createDirectory(at: audio, withIntermediateDirectories: true)
             defer { try? fileManager.removeItem(at: staging) }
@@ -61,7 +61,7 @@ enum BackupService {
             try encoder.encode(manifest).write(to: staging.appendingPathComponent("manifest.json"), options: .atomic)
 
             let output = fileManager.temporaryDirectory
-                .appendingPathComponent("JasPlayer-\(dateStamp()).stillbackup")
+                .appendingPathComponent("JasListen-\(dateStamp()).stillbackup")
             try? fileManager.removeItem(at: output)
             try fileManager.zipItem(at: staging, to: output, shouldKeepParent: false)
             return output
@@ -192,7 +192,7 @@ enum BackupService {
         _ body: (URL) async throws -> T
     ) async throws -> T {
         let staging = fileManager.temporaryDirectory
-            .appendingPathComponent("JasPlayerRestore-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("JasListenRestore-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: staging) }
         return try await body(staging)

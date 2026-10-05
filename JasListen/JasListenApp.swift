@@ -2,13 +2,13 @@ import SwiftData
 import SwiftUI
 
 @main
-struct JasPlayerApp: App {
+struct JasListenApp: App {
     private let container: ModelContainer?
     private let startupError: String?
 
     init() {
         do {
-            container = try ModelContainer(for: Lesson.self)
+            container = try ModelContainer(for: Lesson.self, Playlist.self, PlaylistItem.self)
             startupError = nil
         } catch {
             container = nil
@@ -21,7 +21,7 @@ struct JasPlayerApp: App {
             if let container {
                 LibraryView().modelContainer(container)
             } else {
-                ContentUnavailableView("Library unavailable", systemImage: "externaldrive.badge.exclamationmark", description: Text("JasPlayer could not open local lesson storage. Your audio files have not been deleted. \(startupError ?? "")"))
+                ContentUnavailableView("Library unavailable", systemImage: "externaldrive.badge.exclamationmark", description: Text("JasListen could not open local lesson storage. Your audio files have not been deleted. \(startupError ?? "")"))
             }
         }
     }

@@ -3,7 +3,7 @@
 ## Start here
 
 - Read [PLANS.md](PLANS.md) before product or implementation changes. It defines the native app scope, milestones, and acceptance checks.
-- The active implementation is the SwiftUI multiplatform project in `JasPlayer.xcodeproj`, targeting iOS/iPadOS 17 and macOS 14 or later.
+- The active implementation is the SwiftUI multiplatform project in `JasListen.xcodeproj`, targeting iOS/iPadOS 17 and macOS 14 or later.
 - The root-level `index.html`, `styles.css`, and `app.js` are the legacy web migration source. Keep them available until native acceptance and web-backup migration are complete.
 
 ## Architecture

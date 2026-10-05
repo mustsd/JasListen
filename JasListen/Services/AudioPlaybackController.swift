@@ -21,6 +21,13 @@ struct ABLoop: Equatable {
     }
 }
 
+enum PlaybackQueue {
+    static func nextID(after currentID: UUID, in lessonIDs: [UUID]) -> UUID? {
+        guard let currentIndex = lessonIDs.firstIndex(of: currentID), !lessonIDs.isEmpty else { return nil }
+        return lessonIDs[(currentIndex + 1) % lessonIDs.count]
+    }
+}
+
 enum LoopError: LocalizedError {
     case invalidRange
 
@@ -38,7 +45,9 @@ final class AudioPlaybackController: ObservableObject {
     @Published private(set) var loop: ABLoop?
     @Published private(set) var loopEnabled = false
     @Published private(set) var activeLessonID: UUID?
+    @Published private(set) var completionCount = 0
     @Published private(set) var errorMessage: String?
+    @Published private(set) var volume: Float = 1
 
     private let player = AVPlayer()
     private var timeObserver: Any?
@@ -46,8 +55,9 @@ final class AudioPlaybackController: ObservableObject {
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
-    private var activeTitle = "JasPlayer"
+    private var activeTitle = "JasListen"
     private var resumeAfterInterruption = false
+    private var playbackIntended = false
 
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
@@ -74,6 +84,7 @@ final class AudioPlaybackController: ObservableObject {
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw CocoaError(.fileNoSuchFile)
         }
+        playbackIntended = false
         player.pause()
         removeEndObserver()
         let item = AVPlayerItem(url: url)
@@ -135,18 +146,21 @@ final class AudioPlaybackController: ObservableObject {
         #if os(iOS)
         configureIOSAudioSession()
         #endif
+        playbackIntended = true
         player.playImmediately(atRate: playbackRate)
         isPlaying = true
         updateNowPlayingInfo()
     }
 
     func pause() {
+        playbackIntended = false
         player.pause()
         isPlaying = false
         updateNowPlayingInfo()
     }
 
     func stop() {
+        playbackIntended = false
         player.pause()
         player.replaceCurrentItem(with: nil)
         removeEndObserver()
@@ -176,6 +190,11 @@ final class AudioPlaybackController: ObservableObject {
         playbackRate = choices.min(by: { abs($0 - rate) < abs($1 - rate) }) ?? 1
         if isPlaying { player.rate = playbackRate }
         updateNowPlayingInfo()
+    }
+
+    func setVolume(_ volume: Float) {
+        self.volume = min(max(volume, 0), 1)
+        player.volume = self.volume
     }
 
     func setLoop(start: TimeInterval, end: TimeInterval) throws {
@@ -288,11 +307,15 @@ final class AudioPlaybackController: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.handlePlaybackEnded() }
+            Task { @MainActor [weak self, weak item] in
+                guard let self, let item else { return }
+                self.handlePlaybackEnded(for: item)
+            }
         }
     }
 
-    private func handlePlaybackEnded() {
+    private func handlePlaybackEnded(for item: AVPlayerItem) {
+        guard player.currentItem === item, playbackIntended else { return }
         if let loop, loopEnabled {
             player.seek(to: CMTime(seconds: loop.start, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
             player.playImmediately(atRate: playbackRate)
@@ -300,12 +323,20 @@ final class AudioPlaybackController: ObservableObject {
             updateNowPlayingInfo()
             return
         }
-        // Seeking to the end fires this notification too; only treat it as a
-        // finished lesson when audio was actually playing.
-        guard isPlaying else { return }
+        // Seeking to the end can also post this notification, but a seek while
+        // paused leaves playbackIntended false.
+        playbackIntended = false
         player.pause()
         isPlaying = false
-        updateNowPlayingInfo()
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] finished in
+            guard finished else { return }
+            Task { @MainActor [weak self, weak item] in
+                guard let self, let item, self.player.currentItem === item else { return }
+                self.currentTime = 0
+                self.updateNowPlayingInfo()
+                self.completionCount += 1
+            }
+        }
     }
 
     private func observeAudioSession() {
