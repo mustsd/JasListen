@@ -3,19 +3,25 @@ import SwiftUI
 
 /// One playlist in the sidebar.
 ///
-/// Renaming, deleting, adding audio, and dropping back to the library all stay
-/// with `LibraryView`, so there is one place that owns those alerts; this view
-/// only presents the running order and reorders it.
+/// Renaming, deleting, adding audio, and every lesson-level action all stay
+/// with `RootView`, so there is one place that owns those alerts; this view only
+/// presents the running order, reorders it, and forwards the menu choices.
 struct PlaylistDetailView: View {
     @Environment(\.modelContext) private var context
 
     let playlist: Playlist
-    let libraryLessons: [Lesson]
+    /// Every lesson on this device, used by the "add existing lessons" sheet.
+    let allLessons: [Lesson]
+    /// The playlists a lesson can additionally be placed in.
+    let allPlaylists: [Playlist]
     let activeLessonID: UUID?
     let onPlay: (Lesson, [Lesson]) -> Void
     let onAddAudio: () -> Void
-    let onRename: () -> Void
-    let onDelete: () -> Void
+    let onRenamePlaylist: () -> Void
+    let onDeletePlaylist: () -> Void
+    let onRenameLesson: (Lesson) -> Void
+    let onAddToPlaylist: (Lesson, Playlist) -> Void
+    let onDeleteAudio: (Lesson) -> Void
 
     @State private var showingAddExisting = false
     @State private var pendingLessonIDs: Set<UUID> = []
@@ -126,17 +132,17 @@ struct PlaylistDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Color(red: 0.15, green: 0.39, blue: 0.32))
 
-            Button("Add from Library…", systemImage: "text.badge.plus") { showingAddExisting = true }
+            Button("Add Existing Lessons…", systemImage: "text.badge.plus") { showingAddExisting = true }
                 .buttonStyle(.bordered)
 
             Spacer(minLength: 0)
 
             Menu {
-                Button("Rename Playlist…", systemImage: "pencil") { onRename() }
+                Button("Rename Playlist…", systemImage: "pencil") { onRenamePlaylist() }
                 Button("Add Audio Files…", systemImage: "music.note.list") { onAddAudio() }
-                Button("Add from Library…", systemImage: "text.badge.plus") { showingAddExisting = true }
+                Button("Add Existing Lessons…", systemImage: "text.badge.plus") { showingAddExisting = true }
                 Divider()
-                Button("Delete Playlist", systemImage: "trash", role: .destructive) { onDelete() }
+                Button("Delete Playlist", systemImage: "trash", role: .destructive) { onDeletePlaylist() }
             } label: {
                 Label("Playlist actions", systemImage: "ellipsis.circle")
                     .labelStyle(.iconOnly)
@@ -165,6 +171,15 @@ struct PlaylistDetailView: View {
                     .contextMenu {
                         Button("Play", systemImage: "play.fill") { onPlay(lesson, items.compactMap(\.lesson)) }
                         Divider()
+                        Button("Rename Lesson…", systemImage: "pencil") { onRenameLesson(lesson) }
+                        if !allPlaylists.isEmpty {
+                            Menu("Add to Another Playlist", systemImage: "text.badge.plus") {
+                                ForEach(allPlaylists) { other in
+                                    Button(other.name) { onAddToPlaylist(lesson, other) }
+                                }
+                            }
+                        }
+                        Divider()
                         Button("Move to Top", systemImage: "arrow.up.to.line") { move(item, to: 0) }
                             .disabled(sortOrder != .manual || index == 0)
                         Button("Move Up", systemImage: "arrow.up") { move(item, to: index - 1) }
@@ -176,6 +191,9 @@ struct PlaylistDetailView: View {
                         Divider()
                         Button("Remove from Playlist", systemImage: "minus.circle", role: .destructive) {
                             remove([item])
+                        }
+                        Button("Delete Audio File…", systemImage: "trash", role: .destructive) {
+                            onDeleteAudio(lesson)
                         }
                     }
                 }
@@ -203,7 +221,7 @@ struct PlaylistDetailView: View {
                 .foregroundStyle(Color(red: 0.47, green: 0.59, blue: 0.47))
             Text("This playlist is empty.")
                 .font(.system(size: 19, weight: .medium, design: .serif))
-            Text("Add audio files from this device, or bring in lessons you already imported.")
+            Text("Add audio files from this device, or reuse lessons from another playlist.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -211,7 +229,7 @@ struct PlaylistDetailView: View {
                 Button("Add Audio Files…", systemImage: "plus") { onAddAudio() }
                     .buttonStyle(.borderedProminent)
                     .tint(Color(red: 0.15, green: 0.39, blue: 0.32))
-                Button("Add from Library…", systemImage: "text.badge.plus") { showingAddExisting = true }
+                Button("Add Existing Lessons…", systemImage: "text.badge.plus") { showingAddExisting = true }
                     .buttonStyle(.bordered)
             }
         }
@@ -225,7 +243,7 @@ struct PlaylistDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Add from library")
+                    Text("Add existing lessons")
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                     Text("Choose lessons to place at the end of \(playlist.name).")
                         .font(.system(size: 11))
@@ -237,15 +255,15 @@ struct PlaylistDetailView: View {
 
             Divider()
 
-            if libraryLessons.isEmpty {
+            if allLessons.isEmpty {
                 ContentUnavailableView(
                     "No lessons yet",
                     systemImage: "waveform",
-                    description: Text("Import audio first, then add it to a playlist.")
+                    description: Text("Add audio files to a playlist first, then reuse them here.")
                 )
                 .frame(maxHeight: .infinity)
             } else {
-                List(libraryLessons) { lesson in
+                List(allLessons) { lesson in
                     let alreadyAdded = items.contains { $0.lesson?.id == lesson.id }
                     Button {
                         toggle(lesson)
@@ -310,7 +328,7 @@ struct PlaylistDetailView: View {
     }
 
     private func addSelected() {
-        let selected = libraryLessons.filter { pendingLessonIDs.contains($0.id) }
+        let selected = allLessons.filter { pendingLessonIDs.contains($0.id) }
         guard !selected.isEmpty else { return }
         do {
             try repository.add(selected, to: playlist)

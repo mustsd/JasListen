@@ -15,15 +15,63 @@ struct BackupLessonRecord: Codable, Sendable {
     var lastPosition: Double
 }
 
+/// One playlist inside a native `.stillbackup` archive. `lessonIDs` is the
+/// running order, so array position is the stored playlist position.
+struct BackupPlaylistRecord: Codable, Sendable {
+    var id: UUID
+    var name: String
+    var createdAt: Date
+    var updatedAt: Date
+    var lessonIDs: [UUID]
+}
+
 /// `manifest.json` inside a native `.stillbackup` archive.
 struct BackupManifest: Codable, Sendable {
     var format: String
     var version: Int
     var exportedAt: Date
     var lessons: [BackupLessonRecord]
+    /// Playlists and their running orders. Empty for a version 1 archive,
+    /// which predates playlist support.
+    var playlists: [BackupPlaylistRecord]
 
     static let currentFormat = "still-native-backup"
-    static let currentVersion = 1
+    static let currentVersion = 2
+    /// Versions this build can restore. Version 1 archives carry lessons only.
+    static let readableVersions = 1...2
+
+    init(
+        format: String,
+        version: Int,
+        exportedAt: Date,
+        lessons: [BackupLessonRecord],
+        playlists: [BackupPlaylistRecord] = []
+    ) {
+        self.format = format
+        self.version = version
+        self.exportedAt = exportedAt
+        self.lessons = lessons
+        self.playlists = playlists
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case format
+        case version
+        case exportedAt
+        case lessons
+        case playlists
+    }
+
+    /// `playlists` is optional on decode so archives written before this field
+    /// existed still restore.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        format = try container.decode(String.self, forKey: .format)
+        version = try container.decode(Int.self, forKey: .version)
+        exportedAt = try container.decode(Date.self, forKey: .exportedAt)
+        lessons = try container.decode([BackupLessonRecord].self, forKey: .lessons)
+        playlists = try container.decodeIfPresent([BackupPlaylistRecord].self, forKey: .playlists) ?? []
+    }
 }
 
 /// Web export produced by the legacy player (`still-listening-backup` v1 JSON).
@@ -60,29 +108,40 @@ struct StagedLesson: Sendable {
     var lastPosition: Double
 }
 
+/// A decoded and validated playlist pointing at staged lesson IDs. The IDs are
+/// the archive's lesson IDs; `BackupService.commit` remaps them when a lesson ID
+/// collides during restore.
+struct StagedPlaylist: Sendable {
+    var id: UUID
+    var name: String
+    var createdAt: Date
+    var updatedAt: Date
+    var lessonIDs: [UUID]
+}
+
 /// A backup that has been decoded and validated but not applied yet.
-enum ParsedBackup: Sendable {
-    case native(lessons: [StagedLesson])
-    case legacyWeb(lessons: [StagedLesson])
+struct ParsedBackup: Sendable {
+    var lessons: [StagedLesson]
+    var playlists: [StagedPlaylist]
+    /// Written by the legacy web player rather than this app.
+    var isLegacyWeb: Bool
 
-    var lessonCount: Int {
-        switch self {
-        case .native(let lessons), .legacyWeb(let lessons): lessons.count
-        }
-    }
-
-    var lessons: [StagedLesson] {
-        switch self {
-        case .native(let lessons), .legacyWeb(let lessons): lessons
-        }
-    }
+    var lessonCount: Int { lessons.count }
+    var playlistCount: Int { playlists.count }
 }
 
 /// Cheap identification of a backup file, used to confirm a restore before
 /// any audio is copied into the library.
 struct BackupPreview: Sendable {
     let lessonCount: Int
+    let playlistCount: Int
     let isLegacyWebBackup: Bool
+
+    init(lessonCount: Int, playlistCount: Int = 0, isLegacyWebBackup: Bool) {
+        self.lessonCount = lessonCount
+        self.playlistCount = playlistCount
+        self.isLegacyWebBackup = isLegacyWebBackup
+    }
 }
 
 enum BackupError: LocalizedError {
@@ -128,9 +187,13 @@ enum BackupParser {
         guard let data = manifestData(in: archive),
               let manifest = try? decodeManifest(data),
               manifest.format == BackupManifest.currentFormat,
-              manifest.version == BackupManifest.currentVersion,
+              BackupManifest.readableVersions.contains(manifest.version),
               !manifest.lessons.isEmpty else { return nil }
-        return BackupPreview(lessonCount: manifest.lessons.count, isLegacyWebBackup: false)
+        return BackupPreview(
+            lessonCount: manifest.lessons.count,
+            playlistCount: manifest.playlists.count,
+            isLegacyWebBackup: false
+        )
     }
 
     static func parseLegacyWebBackup(from url: URL, destination: URL) async throws -> ParsedBackup {
@@ -169,7 +232,7 @@ enum BackupParser {
             lessons.append(lesson)
         }
         guard !lessons.isEmpty else { throw BackupError.invalidManifest }
-        return .legacyWeb(lessons: lessons)
+        return ParsedBackup(lessons: lessons, playlists: [], isLegacyWeb: true)
     }
 
     static func parseNativeBackup(from url: URL, destination: URL) async throws -> ParsedBackup {
@@ -178,7 +241,7 @@ enum BackupParser {
         guard let manifestData = manifestData(in: archive),
               let manifest = try? decodeManifest(manifestData),
               manifest.format == BackupManifest.currentFormat,
-              manifest.version == BackupManifest.currentVersion,
+              BackupManifest.readableVersions.contains(manifest.version),
               !manifest.lessons.isEmpty else { throw BackupError.unsupportedFormat }
         guard Set(manifest.lessons.map(\.id)).count == manifest.lessons.count else {
             throw BackupError.invalidManifest
@@ -212,7 +275,32 @@ enum BackupParser {
             try await validateAudio(lesson)
             lessons.append(lesson)
         }
-        return .native(lessons: lessons)
+        let playlists = parsedPlaylists(manifest.playlists, lessonIDs: Set(lessons.map(\.id)))
+        return ParsedBackup(lessons: lessons, playlists: playlists, isLegacyWeb: false)
+    }
+
+    /// Keeps only playlist records that still make sense: named, unique, and
+    /// referring to lessons the archive actually carries. Lesson IDs are
+    /// deduplicated in running order, so a restored playlist can never show the
+    /// same lesson twice.
+    static func parsedPlaylists(_ records: [BackupPlaylistRecord], lessonIDs: Set<UUID>) -> [StagedPlaylist] {
+        var seenPlaylistIDs = Set<UUID>()
+        var playlists: [StagedPlaylist] = []
+        for record in records {
+            let name = record.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, seenPlaylistIDs.insert(record.id).inserted else { continue }
+            var seenLessonIDs = Set<UUID>()
+            let ordered = record.lessonIDs.filter { lessonIDs.contains($0) && seenLessonIDs.insert($0).inserted }
+            guard !ordered.isEmpty else { continue }
+            playlists.append(StagedPlaylist(
+                id: record.id,
+                name: name,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                lessonIDs: ordered
+            ))
+        }
+        return playlists
     }
 
     /// Validates every parsed lesson once more before it is applied.
@@ -225,13 +313,26 @@ enum BackupParser {
     /// another imported lesson. Restore merges instead of overwriting, so a
     /// collision must never replace an existing lesson.
     static func assignIDs(_ lessons: [StagedLesson], existingIDs: Set<UUID>) -> [StagedLesson] {
+        assignIDsAndRemap(lessons, existingIDs: existingIDs).lessons
+    }
+
+    /// Handles the same collision as `assignIDs` while also reporting the
+    /// archive ID to stored ID mapping, so restored playlist membership follows
+    /// a lesson whose ID was reassigned.
+    static func assignIDsAndRemap(
+        _ lessons: [StagedLesson],
+        existingIDs: Set<UUID>
+    ) -> (lessons: [StagedLesson], remapping: [UUID: UUID]) {
         var used = existingIDs
-        return lessons.map { lesson in
+        var remapping: [UUID: UUID] = [:]
+        let assigned = lessons.map { lesson in
             var updated = lesson
             while used.contains(updated.id) { updated.id = UUID() }
             used.insert(updated.id)
+            remapping[lesson.id] = updated.id
             return updated
         }
+        return (assigned, remapping)
     }
 
     static func decodeManifest(_ data: Data) throws -> BackupManifest {

@@ -137,7 +137,8 @@ struct BackupAcceptanceTests {
     static func manifestData(
         lessons: [(id: UUID, title: String, audioPath: String, duration: Double, lastPosition: Double)],
         format: String = BackupManifest.currentFormat,
-        version: Int = BackupManifest.currentVersion
+        version: Int = BackupManifest.currentVersion,
+        playlists: [BackupPlaylistRecord] = []
     ) throws -> Data {
         let records = lessons.map { lesson in
             BackupLessonRecord(
@@ -155,11 +156,26 @@ struct BackupAcceptanceTests {
             format: format,
             version: version,
             exportedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            lessons: records
+            lessons: records,
+            playlists: playlists
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return try encoder.encode(manifest)
+    }
+
+    static func playlistRecord(
+        id: UUID = UUID(),
+        name: String = "Course",
+        lessonIDs: [UUID]
+    ) -> BackupPlaylistRecord {
+        BackupPlaylistRecord(
+            id: id,
+            name: name,
+            createdAt: Date(timeIntervalSince1970: 1_600_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_600_000_000),
+            lessonIDs: lessonIDs
+        )
     }
 
     // MARK: - A–B range validation (PLANS.md line 59)
@@ -724,7 +740,7 @@ struct BackupAcceptanceTests {
             (audioPath, wav)
         ])
         try await expectRejected("wrong version", [
-            ("manifest.json", Self.manifestData(lessons: [(id, "x", audioPath, 1, 0)], version: 2)),
+            ("manifest.json", Self.manifestData(lessons: [(id, "x", audioPath, 1, 0)], version: 3)),
             (audioPath, wav)
         ])
         try await expectRejected("empty lessons", [
@@ -780,6 +796,7 @@ struct BackupAcceptanceTests {
 
     @Test func manifestRoundTripsAllFields() throws {
         let id = UUID()
+        let playlistID = UUID()
         let manifest = BackupManifest(
             format: BackupManifest.currentFormat,
             version: BackupManifest.currentVersion,
@@ -795,6 +812,15 @@ struct BackupAcceptanceTests {
                     lastPlayedAt: nil,
                     lastPosition: 0.25
                 )
+            ],
+            playlists: [
+                BackupPlaylistRecord(
+                    id: playlistID,
+                    name: "Course",
+                    createdAt: Date(timeIntervalSince1970: 1_600_000_000),
+                    updatedAt: Date(timeIntervalSince1970: 1_600_000_000),
+                    lessonIDs: [id]
+                )
             ]
         )
         let encoder = JSONEncoder()
@@ -806,6 +832,22 @@ struct BackupAcceptanceTests {
         #expect(decoded.lessons[0].id == id)
         #expect(decoded.lessons[0].lastPlayedAt == nil)
         #expect(abs(decoded.lessons[0].lastPosition - 0.25) < 0.0001)
+        #expect(decoded.playlists.count == 1)
+        #expect(decoded.playlists[0].id == playlistID)
+        #expect(decoded.playlists[0].name == "Course")
+        #expect(decoded.playlists[0].lessonIDs == [id])
+    }
+
+    /// A version 1 manifest has no `playlists` key at all, so decoding must
+    /// treat the field as optional rather than rejecting the archive.
+    @Test func decodesAVersionOneManifestWithoutPlaylists() throws {
+        let json = """
+        {"format":"still-native-backup","version":1,"exportedAt":"2025-01-01T00:00:00Z","lessons":[]}
+        """.data(using: .utf8)!
+        let manifest = try BackupParser.decodeManifest(json)
+        #expect(manifest.version == 1)
+        #expect(manifest.lessons.isEmpty)
+        #expect(manifest.playlists.isEmpty)
     }
 
     // MARK: - Saved position (PLANS.md lines 21, 62)
@@ -834,6 +876,224 @@ struct BackupAcceptanceTests {
         controller.pause()
         #expect(lesson.lastPosition == 6)
         #expect(lesson.lastPlayedAt != nil, "played time is recorded once playback happens")
+    }
+
+    // MARK: - Playlists in backups and the imported inbox
+
+    @MainActor
+    @Test func nativeBackupRoundTripPreservesPlaylistsAndRunningOrder() async throws {
+        let working = try Self.makeWorkingDirectory("playlist-round-trip")
+        let library = try Self.makeLibrary(in: working)
+        let context = try Self.makeContext()
+
+        let first = try await AudioImportService.importAudio(
+            from: try Self.writeWAV(to: working.appendingPathComponent("first.wav")),
+            title: "First",
+            context: context,
+            audioDirectory: library
+        )
+        let second = try await AudioImportService.importAudio(
+            from: try Self.writeWAV(to: working.appendingPathComponent("second.wav")),
+            title: "Second",
+            context: context,
+            audioDirectory: library
+        )
+        let third = try await AudioImportService.importAudio(
+            from: try Self.writeWAV(to: working.appendingPathComponent("third.wav")),
+            title: "Third",
+            context: context,
+            audioDirectory: library
+        )
+
+        let repository = SwiftDataPlaylistRepository(context: context)
+        let course = try repository.create(named: "Course")
+        let review = try repository.create(named: "Review")
+        // Deliberately not alphabetical or insertion ordered, so a restored
+        // playlist can only match if the running order travelled with it.
+        _ = try repository.add([third, first], to: course)
+        _ = try repository.add([second, first], to: review)
+
+        let archive = try await BackupService.makeBackup(
+            lessons: [first, second, third],
+            playlists: [course, review],
+            audioDirectory: library
+        )
+        #expect(BackupService.preview(of: archive)?.lessonCount == 3)
+        #expect(BackupService.preview(of: archive)?.playlistCount == 2)
+
+        // Empty the store so the exported archive is what is read back.
+        for playlist in try context.fetch(FetchDescriptor<Playlist>()) { context.delete(playlist) }
+        for lesson in try context.fetch(FetchDescriptor<Lesson>()) { context.delete(lesson) }
+        try context.save()
+        try FileManager.default.removeItem(at: library)
+        try FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
+
+        let count = try await BackupService.restore(from: archive, context: context, audioDirectory: library)
+        #expect(count == 3)
+
+        let restored = try context.fetch(FetchDescriptor<Playlist>())
+        #expect(Set(restored.map(\.name)) == ["Course", "Review"])
+        let restoredCourse = try #require(restored.first { $0.name == "Course" })
+        #expect(restoredCourse.orderedLessons.map(\.title) == ["Third", "First"])
+        let restoredReview = try #require(restored.first { $0.name == "Review" })
+        #expect(restoredReview.orderedLessons.map(\.title) == ["Second", "First"])
+
+        // The lesson shared by both playlists is stored once.
+        let shared = try context.fetch(FetchDescriptor<Lesson>()).filter { $0.title == "First" }
+        #expect(shared.count == 1)
+        let sharedID = try #require(shared.first?.id)
+        #expect(restoredCourse.orderedLessons.contains { $0.id == sharedID })
+        #expect(restoredReview.orderedLessons.contains { $0.id == sharedID })
+    }
+
+    @MainActor
+    @Test func restoreRemapsPlaylistMembershipWhenALessonIDCollides() async throws {
+        let working = try Self.makeWorkingDirectory("playlist-collision")
+        let library = try Self.makeLibrary(in: working)
+        let context = try Self.makeContext()
+
+        let existing = try await AudioImportService.importAudio(
+            from: try Self.writeWAV(to: working.appendingPathComponent("existing.wav")),
+            title: "Existing",
+            context: context,
+            audioDirectory: library
+        )
+
+        let staging = working.appendingPathComponent("staging", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        let staged = Self.stagedLesson(
+            id: existing.id,
+            title: "Duplicate",
+            source: try Self.writeWAV(to: staging.appendingPathComponent("duplicate.wav")),
+            relativeAudioPath: "\(existing.id.uuidString).wav"
+        )
+        // The archive playlist points at the colliding ID, so it must follow the
+        // reassigned lesson instead of landing on the pre-existing one.
+        let stagedPlaylist = StagedPlaylist(
+            id: UUID(),
+            name: "Restored",
+            createdAt: .now,
+            updatedAt: .now,
+            lessonIDs: [existing.id]
+        )
+
+        let count = try BackupService.commit(
+            [staged],
+            context: context,
+            playlists: [stagedPlaylist],
+            audioDirectory: library
+        )
+        #expect(count == 1)
+
+        let lessons = try context.fetch(FetchDescriptor<Lesson>())
+        #expect(lessons.count == 2, "the existing lesson is kept")
+        let imported = try #require(lessons.first { $0.title == "Duplicate" })
+        #expect(imported.id != existing.id)
+        let playlist = try #require(try context.fetch(FetchDescriptor<Playlist>()).first { $0.name == "Restored" })
+        #expect(playlist.orderedLessons.map(\.id) == [imported.id])
+        #expect(playlist.items.count == 1)
+    }
+
+    @Test func playlistParsingDropsMissingRepeatedAndUnnamedEntries() throws {
+        let known = UUID()
+        let missing = UUID()
+        let kept = Self.playlistRecord(name: "  Kept  ", lessonIDs: [known, missing, known])
+        let unnamed = Self.playlistRecord(name: "   ", lessonIDs: [known])
+        let empty = Self.playlistRecord(name: "Empty", lessonIDs: [missing])
+
+        let parsed = BackupParser.parsedPlaylists([kept, unnamed, empty], lessonIDs: [known])
+        #expect(parsed.count == 1)
+        #expect(parsed.first?.name == "Kept")
+        #expect(parsed.first?.lessonIDs == [known])
+
+        // A playlist ID that repeats in one manifest collapses to the first one.
+        let repeatedID = [kept, Self.playlistRecord(id: kept.id, name: "Second", lessonIDs: [known])]
+        #expect(BackupParser.parsedPlaylists(repeatedID, lessonIDs: [known]).count == 1)
+    }
+
+    @MainActor
+    @Test func restoresAVersionOneArchiveAndFilesItInTheInbox() async throws {
+        let working = try Self.makeWorkingDirectory("version-one")
+        let library = try Self.makeLibrary(in: working)
+        let context = try Self.makeContext()
+        let id = UUID()
+        let audioPath = "Audio/\(id.uuidString).wav"
+        let wav = try Data(contentsOf: try Self.writeWAV(to: working.appendingPathComponent("source.wav")))
+        let archive = try Self.makeArchive(entries: [
+            ("manifest.json", try Self.manifestData(lessons: [(id, "Old lesson", audioPath, 1, 0)], version: 1)),
+            (audioPath, wav)
+        ], in: working)
+
+        #expect(BackupService.preview(of: archive)?.playlistCount == 0)
+        let count = try await BackupService.restore(from: archive, context: context, audioDirectory: library)
+        #expect(count == 1)
+        #expect(try context.fetch(FetchDescriptor<Playlist>()).isEmpty)
+
+        // The post-restore sweep is what keeps a version 1 restore reachable.
+        let repository = SwiftDataPlaylistRepository(context: context)
+        #expect(try repository.fileUnfiledLessons(in: PlaylistInbox.name) == 1)
+        let inbox = try #require(try repository.playlist(named: PlaylistInbox.name))
+        #expect(inbox.orderedLessons.map(\.id) == [id])
+    }
+
+    @MainActor
+    @Test func fileUnfiledLessonsFilesUnplacedLessonsOnceInCreatedAtOrder() throws {
+        let context = try Self.makeContext()
+        let repository = SwiftDataPlaylistRepository(context: context)
+        let oldest = Lesson(
+            title: "Oldest",
+            relativeAudioPath: "a.wav",
+            audioType: "audio/wav",
+            duration: 1,
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        let middle = Lesson(
+            title: "Middle",
+            relativeAudioPath: "b.wav",
+            audioType: "audio/wav",
+            duration: 1,
+            createdAt: Date(timeIntervalSince1970: 200)
+        )
+        let newest = Lesson(
+            title: "Newest",
+            relativeAudioPath: "c.wav",
+            audioType: "audio/wav",
+            duration: 1,
+            createdAt: Date(timeIntervalSince1970: 300)
+        )
+        for lesson in [oldest, middle, newest] { context.insert(lesson) }
+        try context.save()
+
+        let course = try repository.create(named: "Course")
+        _ = try repository.add([newest], to: course)
+
+        #expect(try repository.fileUnfiledLessons(in: PlaylistInbox.name) == 2)
+        let inbox = try #require(try repository.playlist(named: PlaylistInbox.name))
+        #expect(inbox.orderedLessons.map(\.title) == ["Oldest", "Middle"])
+        #expect(try repository.allPlaylists().count == 2, "the inbox is created once")
+
+        // A second sweep changes nothing, so launch is idempotent.
+        #expect(try repository.fileUnfiledLessons(in: PlaylistInbox.name) == 0)
+        #expect(course.orderedLessons.map(\.title) == ["Newest"])
+    }
+
+    @MainActor
+    @Test func removingALessonFromOnePlaylistKeepsItsAudioAndOtherPlacements() throws {
+        let context = try Self.makeContext()
+        let lesson = Lesson(title: "Shared", relativeAudioPath: "shared.wav", audioType: "audio/wav", duration: 1)
+        context.insert(lesson)
+
+        let repository = SwiftDataPlaylistRepository(context: context)
+        let first = try repository.create(named: "First")
+        let second = try repository.create(named: "Second")
+        _ = try repository.add([lesson], to: first)
+        _ = try repository.add([lesson], to: second)
+
+        try repository.remove(first.items, from: first)
+
+        #expect(first.items.isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Lesson>()).count == 1, "the audio file stays")
+        #expect(second.orderedLessons.map(\.id) == [lesson.id], "the other placement is untouched")
     }
 
     // MARK: - Helpers

@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct LibraryView: View {
+struct RootView: View {
     /// What the detail pane is showing. A lesson opens the player; a playlist
     /// opens its running order.
     private enum SidebarSelection: Hashable {
@@ -28,6 +28,7 @@ struct LibraryView: View {
     @State private var newLessonTitle = ""
     @State private var showingDeleteConfirmation = false
     @State private var lessonToDelete: Lesson?
+    @State private var deleteConfirmationMessage = ""
     @State private var alertMessage: String?
     @State private var backupAlert: BackupAlert?
     @State private var pendingBackupURL: URL?
@@ -43,7 +44,8 @@ struct LibraryView: View {
     @State private var showingPlaylistDeleteConfirmation = false
     @State private var playlistToDelete: Playlist?
     /// Set while the audio picker was opened from a playlist, so whatever is
-    /// imported is placed in that playlist instead of only in the library.
+    /// imported is placed in that playlist. Without it, an import lands in the
+    /// `Imported` playlist so a new lesson is never left unfiled.
     @State private var importTargetPlaylistID: UUID?
 
     private struct BackupAlert: Identifiable {
@@ -63,8 +65,14 @@ struct LibraryView: View {
 
     private var playbackQueueTitle: String {
         guard let id = playbackQueuePlaylistID,
-              let playlist = playlists.first(where: { $0.id == id }) else { return "Library" }
+              let playlist = playlists.first(where: { $0.id == id }) else { return "Queue" }
         return playlist.name
+    }
+
+    /// Playlists other than the one `lesson` is being handled in, used by the
+    /// "Add to Another Playlist" menu.
+    private func otherPlaylists(than excluded: Playlist?) -> [Playlist] {
+        playlists.filter { $0.id != excluded?.id }
     }
 
     private var playlistRepository: SwiftDataPlaylistRepository {
@@ -84,7 +92,7 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationSplitView {
-            librarySidebar
+            playlistSidebar
                 .navigationSplitViewColumnWidth(min: 260, ideal: 310, max: 380)
         } detail: {
             if let lesson = selectedLesson {
@@ -99,12 +107,16 @@ struct LibraryView: View {
             } else if let playlist = selectedPlaylist {
                 PlaylistDetailView(
                     playlist: playlist,
-                    libraryLessons: lessons,
+                    allLessons: lessons,
+                    allPlaylists: otherPlaylists(than: playlist),
                     activeLessonID: playback.activeLessonID,
                     onPlay: { play($0, in: playlist, orderedLessons: $1) },
                     onAddAudio: { beginAudioImport(into: playlist) },
-                    onRename: { beginRename(playlist) },
-                    onDelete: { confirmDelete(playlist) }
+                    onRenamePlaylist: { beginRename(playlist) },
+                    onDeletePlaylist: { confirmDelete(playlist) },
+                    onRenameLesson: { rename($0) },
+                    onAddToPlaylist: { add($0, to: $1) },
+                    onDeleteAudio: { confirmDeleteAudio($0, from: playlist) }
                 )
                 .id(playlist.id)
             } else {
@@ -148,16 +160,18 @@ struct LibraryView: View {
         } message: {
             Text("Choose a title for this audio.")
         }
-        .confirmationDialog("Remove this lesson and its audio?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
-            Button("Remove Lesson", role: .destructive) { deleteLesson() }
+        .confirmationDialog("Delete this audio file?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete Audio File", role: .destructive) { deleteLesson() }
             Button("Cancel", role: .cancel) { lessonToDelete = nil }
+        } message: {
+            Text(deleteConfirmationMessage)
         }
         .alert("New playlist", isPresented: $showingNewPlaylistPrompt) {
             TextField("Playlist name", text: $newPlaylistName)
             Button("Create") { createPlaylist() }
             Button("Cancel", role: .cancel) { newPlaylistName = "" }
         } message: {
-            Text("Name a playlist, then add audio files or lessons from your library.")
+            Text("Name a playlist, then add audio files or lessons you already imported.")
         }
         .alert("Rename playlist", isPresented: $showingPlaylistRename) {
             TextField("Playlist name", text: $playlistRenameName)
@@ -170,22 +184,26 @@ struct LibraryView: View {
             Button("Delete Playlist", role: .destructive) { deletePlaylist() }
             Button("Cancel", role: .cancel) { playlistToDelete = nil }
         } message: {
-            Text("The audio stays in your library; only the playlist is removed.")
+            Text("The audio stays on this device; only the playlist is removed.")
         }
         .task {
-            if selection == nil, let first = lessons.first { select(first) }
-        }
-        .onChange(of: lessons.map(\.id)) { _, ids in
-            // A lesson can disappear (removed, or restored elsewhere); fall back
-            // to the first one so the detail pane never points at nothing.
-            if case .lesson(let id) = selection, !ids.contains(id) {
-                selection = ids.first.map(SidebarSelection.lesson)
-            } else if selection == nil, let id = ids.first {
-                selection = .lesson(id)
+            // Everything that is in no playlist is filed into `Imported` first,
+            // so the sidebar always has somewhere to show it.
+            try? playlistRepository.fileUnfiledLessons(in: PlaylistInbox.name)
+            if selection == nil, let first = try? playlistRepository.allPlaylists().first {
+                select(first)
             }
         }
+        .onChange(of: lessons.map(\.id)) { _, ids in
+            // A lesson can disappear (deleted, or replaced by a restore); fall
+            // back to the playlist it came from so the detail pane is never empty.
+            guard case .lesson(let id) = selection, !ids.contains(id) else { return }
+            selection = fallbackPlaylistSelection()
+        }
         .onChange(of: playlists.map(\.id)) { _, ids in
-            if case .playlist(let id) = selection, !ids.contains(id) { selection = nil }
+            if case .playlist(let id) = selection, !ids.contains(id) {
+                selection = ids.first.map { .playlist($0) }
+            }
         }
         .onChange(of: playback.completionCount) { _, _ in advancePlaybackQueue() }
         .onChange(of: showingTitlePrompt) { _, isShowing in
@@ -200,14 +218,13 @@ struct LibraryView: View {
         }
     }
 
-    private var librarySidebar: some View {
+    private var playlistSidebar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image("logo")
+                Image("AppLogo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .accessibilityLabel("JasListen")
                 Text("JasListen")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
@@ -235,41 +252,13 @@ struct LibraryView: View {
 
             List(selection: $selection) {
                 Section {
-                    ForEach(lessons) { lesson in
-                        LessonRow(lesson: lesson)
-                            .tag(SidebarSelection.lesson(lesson.id))
-                            .contextMenu {
-                                Button("Rename", systemImage: "pencil") { rename(lesson) }
-                                addToPlaylistMenu(for: lesson)
-                                Button("Remove", systemImage: "trash", role: .destructive) {
-                                    lessonToDelete = lesson
-                                    showingDeleteConfirmation = true
-                                }
-                            }
-                    }
-                    .onDelete { offsets in
-                        guard let index = offsets.first, lessons.indices.contains(index) else { return }
-                        lessonToDelete = lessons[index]
-                        showingDeleteConfirmation = true
-                    }
-                } header: {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("YOUR LIBRARY")
-                        Spacer()
-                        Text("\(lessons.count)")
-                    }
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(1.5)
-                }
-
-                Section {
                     ForEach(playlists) { playlist in
                         PlaylistRow(playlist: playlist)
                             .tag(SidebarSelection.playlist(playlist.id))
                             .contextMenu {
                                 Button("Rename Playlist…", systemImage: "pencil") { beginRename(playlist) }
                                 Button("Add Audio Files…", systemImage: "music.note.list") { beginAudioImport(into: playlist) }
-                                Button("Add from Library…", systemImage: "text.badge.plus") { select(playlist) }
+                                Button("Add Existing Lessons…", systemImage: "text.badge.plus") { select(playlist) }
                                 Divider()
                                 Button("Delete Playlist", systemImage: "trash", role: .destructive) { confirmDelete(playlist) }
                             }
@@ -382,18 +371,23 @@ struct LibraryView: View {
 
     private var emptyDetail: some View {
         VStack(spacing: 18) {
-            Image(systemName: "waveform")
+            Image(systemName: "music.note.list")
                 .font(.system(size: 38, weight: .light))
                 .foregroundStyle(Color(red: 0.47, green: 0.59, blue: 0.47))
             Text("Make room for every word.")
                 .font(.system(size: 25, weight: .medium, design: .serif))
-            Text("Add an MP3, several files, or a folder of audio to begin.")
+            Text("Create a playlist, then add audio files to it — or add audio now and it is filed in \(PlaylistInbox.name).")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-            Button("Add audio lesson", systemImage: "plus") { presentAudioPicker(allowingFolders: true) }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.15, green: 0.39, blue: 0.32))
-                .disabled(isImportingAudio)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 10) {
+                Button("New playlist", systemImage: "plus") { beginNewPlaylist() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.15, green: 0.39, blue: 0.32))
+                Button("Add audio", systemImage: "waveform") { presentAudioPicker(allowingFolders: true) }
+                    .buttonStyle(.bordered)
+                    .disabled(isImportingAudio)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
@@ -488,17 +482,18 @@ struct LibraryView: View {
             isImportingAudio = false
             importProgress = nil
             if let last = imported.last {
-                if let targetID = importTargetPlaylistID,
-                   let playlist = playlists.first(where: { $0.id == targetID }) {
+                if let playlist = destinationPlaylist() {
                     do { try playlistRepository.add(imported, to: playlist) }
                     catch { alertMessage = "Audio was imported but could not be added to the playlist: \(error.localizedDescription)" }
                     importTargetPlaylistID = nil
-                    selection = .playlist(targetID)
-                    playbackQueue = playlist.orderedLessons
-                    playbackQueuePlaylistID = targetID
+                    select(playlist)
                 } else {
+                    // The playlists could not be opened. The launch sweep files
+                    // these lessons later, so keep the player on the last import
+                    // instead of discarding it.
+                    importTargetPlaylistID = nil
                     selection = .lesson(last.id)
-                    playbackQueue = lessons + imported.filter { lesson in !lessons.contains(where: { $0.id == lesson.id }) }
+                    playbackQueue = [last]
                     playbackQueuePlaylistID = nil
                     load(last)
                 }
@@ -536,16 +531,14 @@ struct LibraryView: View {
         Task {
             do {
                 let lesson = try await AudioImportService.importAudio(from: url, title: title, context: context)
-                if let targetID = importTargetPlaylistID,
-                   let playlist = playlists.first(where: { $0.id == targetID }) {
+                if let playlist = destinationPlaylist() {
                     try playlistRepository.add([lesson], to: playlist)
                     importTargetPlaylistID = nil
-                    selection = .playlist(targetID)
-                    playbackQueue = playlist.orderedLessons
-                    playbackQueuePlaylistID = targetID
+                    select(playlist)
                 } else {
+                    importTargetPlaylistID = nil
                     selection = .lesson(lesson.id)
-                    playbackQueue = lessons + [lesson]
+                    playbackQueue = [lesson]
                     playbackQueuePlaylistID = nil
                     load(lesson)
                 }
@@ -558,8 +551,24 @@ struct LibraryView: View {
         }
     }
 
-    private func select(_ lesson: Lesson) {
-        selection = .lesson(lesson.id)
+    /// Where imported audio is placed: the playlist that opened the picker, or
+    /// the shared inbox when the import came from the sidebar, a drop, or the
+    /// empty detail pane. This is what keeps every lesson inside a playlist.
+    private func destinationPlaylist() -> Playlist? {
+        if let targetID = importTargetPlaylistID,
+           let playlist = playlists.first(where: { $0.id == targetID }) {
+            return playlist
+        }
+        return try? playlistRepository.ensurePlaylist(named: PlaylistInbox.name)
+    }
+
+    /// The playlist to show after the selected lesson disappeared: the one the
+    /// queue came from, else the first playlist on this device.
+    private func fallbackPlaylistSelection() -> SidebarSelection? {
+        if let id = playbackQueuePlaylistID, playlists.contains(where: { $0.id == id }) {
+            return .playlist(id)
+        }
+        return playlists.first.map { .playlist($0.id) }
     }
 
     private func handleSidebarSelection(_ newValue: SidebarSelection?) {
@@ -567,7 +576,7 @@ struct LibraryView: View {
         case .lesson(let id):
             if playbackQueuePlaylistID == nil || !playbackQueue.contains(where: { $0.id == id }) {
                 playbackQueuePlaylistID = nil
-                playbackQueue = lessons
+                playbackQueue = lessons.filter { $0.id == id }
             }
             guard let lesson = lessons.first(where: { $0.id == id }), playback.activeLessonID != id else { return }
             load(lesson)
@@ -638,13 +647,29 @@ struct LibraryView: View {
         renamingLessonID = nil
     }
 
+    /// Asks before deleting the audio file itself. Removing a lesson from a
+    /// playlist never reaches here, so the file only disappears on request.
+    private func confirmDeleteAudio(_ lesson: Lesson, from playlist: Playlist?) {
+        let placements = lesson.playlistItems.compactMap(\.playlist?.name)
+        let others = placements.filter { $0 != playlist?.name }
+        var message = "This deletes the audio file from this device."
+        if others.isEmpty {
+            message += " No other playlist uses it."
+        } else {
+            message += " It is also in \(others.joined(separator: ", ")), which will lose it."
+        }
+        lessonToDelete = lesson
+        deleteConfirmationMessage = message
+        showingDeleteConfirmation = true
+    }
+
     private func deleteLesson() {
         guard let lesson = lessonToDelete else { return }
         do {
             if playback.activeLessonID == lesson.id {
                 try playback.updateSavedPosition(lesson, context: context)
                 playback.stop()
-                selection = nil
+                selection = fallbackPlaylistSelection()
             }
             try SwiftDataLessonRepository(context: context).remove(lesson)
             let file = try AudioImportService.audioURL(for: lesson)
@@ -653,6 +678,13 @@ struct LibraryView: View {
         } catch {
             alertMessage = "Could not remove the lesson: \(error.localizedDescription)"
         }
+    }
+
+    /// Adds an already imported lesson to another playlist, which is the only
+    /// way a lesson ends up in more than one running order.
+    private func add(_ lesson: Lesson, to playlist: Playlist) {
+        do { try playlistRepository.add([lesson], to: playlist) }
+        catch { alertMessage = "Could not add the lesson: \(error.localizedDescription)" }
     }
 
     private func beginNewPlaylist() {
@@ -702,29 +734,13 @@ struct LibraryView: View {
         presentAudioPicker(allowingFolders: true)
     }
 
-    @ViewBuilder
-    private func addToPlaylistMenu(for lesson: Lesson) -> some View {
-        Menu("Add to Playlist", systemImage: "text.badge.plus") {
-            if playlists.isEmpty {
-                Button("Create Playlist…") { beginNewPlaylist() }
-            } else {
-                ForEach(playlists) { playlist in
-                    Button(playlist.name) {
-                        do { try playlistRepository.add([lesson], to: playlist) }
-                        catch { alertMessage = "Could not add the lesson: \(error.localizedDescription)" }
-                    }
-                }
-            }
-        }
-    }
-
     private func exportBackup() {
         guard !isExportingBackup else { return }
         isExportingBackup = true
         Task {
             defer { isExportingBackup = false }
             do {
-                let url = try await BackupService.makeBackup(lessons: lessons)
+                let url = try await BackupService.makeBackup(lessons: lessons, playlists: playlists)
                 backupDocument = BackupDocument(backupURL: url)
                 showingBackupExporter = true
             } catch {
@@ -742,22 +758,27 @@ struct LibraryView: View {
     }
 
     /// Identifies a selected or opened backup and asks for confirmation before
-    /// anything is written to the library.
+    /// anything is written to the lesson store.
     private func openBackup(at url: URL) {
         importTargetPlaylistID = nil
         if let preview = BackupService.preview(of: url) {
             pendingBackupURL = url
             let count = preview.lessonCount
+            let playlistCount = preview.playlistCount
             let description = preview.isLegacyWebBackup ? "web backup from the original player" : "JasListen backup"
+            var summary = "This \(description) contains \(count) lesson\(count == 1 ? "" : "s")"
+            if playlistCount > 0 {
+                summary += " and \(playlistCount) playlist\(playlistCount == 1 ? "" : "s")"
+            }
             backupAlert = BackupAlert(
-                message: "This \(description) contains \(count) lesson\(count == 1 ? "" : "s"). Existing lessons are kept and conflicting IDs are reassigned."
+                message: "\(summary). Existing lessons are kept and conflicting IDs are reassigned."
             )
             return
         }
         if pendingBackupURL != nil {
             cancelPendingBackup()
         }
-        alertMessage = "This file is not a JasListen backup, or it is damaged. Your library was not changed."
+        alertMessage = "This file is not a JasListen backup, or it is damaged. Your lessons were not changed."
     }
 
     private func applyPendingBackup() {
@@ -789,9 +810,16 @@ struct LibraryView: View {
         defer { try? FileManager.default.removeItem(at: url) }
         do {
             let count = try await BackupService.restore(from: url, context: context)
-            alertMessage = "Restored \(count) lesson\(count == 1 ? "" : "s"). Existing lessons were kept."
+            // A version 1 or web backup carries no playlists, so anything it
+            // restored is filed into the inbox rather than staying invisible.
+            let filed = (try? playlistRepository.fileUnfiledLessons(in: PlaylistInbox.name)) ?? 0
+            var message = "Restored \(count) lesson\(count == 1 ? "" : "s"). Existing lessons were kept."
+            if filed > 0 {
+                message += " \(filed) went to \(PlaylistInbox.name)."
+            }
+            alertMessage = message
         } catch {
-            alertMessage = "Backup restore failed. Your library was not changed. \(error.localizedDescription)"
+            alertMessage = "Backup restore failed. Your lessons were not changed. \(error.localizedDescription)"
         }
     }
 
@@ -826,36 +854,6 @@ private enum AudioImportPicker {
     }
 }
 #endif
-
-private struct LessonRow: View {
-    let lesson: Lesson
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(red: 0.25, green: 0.43, blue: 0.33))
-                .frame(width: 35, height: 38)
-                .background(Color(red: 0.91, green: 0.93, blue: 0.85), in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(lesson.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Text(lesson.lastPlayedAt?.formatted(date: .abbreviated, time: .omitted) ?? "New lesson")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 4)
-            Text(formatDuration(lesson.duration))
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 3)
-        .tag(lesson.id)
-    }
-
-    private func formatDuration(_ value: Double) -> String {
-        let seconds = max(0, Int(value))
-        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
-    }
-}
 
 private struct PlaylistRow: View {
     let playlist: Playlist

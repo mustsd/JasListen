@@ -14,7 +14,7 @@
 		100000000000000000000005 /* AudioPlaybackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* AudioPlaybackController.swift */; };
 		100000000000000000000006 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* BackupService.swift */; };
 		100000000000000000000007 /* BackupDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* BackupDocument.swift */; };
-		100000000000000000000008 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* LibraryView.swift */; };
+		100000000000000000000008 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* RootView.swift */; };
 		100000000000000000000009 /* PlayerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* PlayerDetailView.swift */; };
 		10000000000000000000000A /* JasListenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* JasListenTests.swift */; };
 		10000000000000000000000B /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 800000000000000000000001 /* ZIPFoundation */; };
@@ -25,6 +25,7 @@
 		100000000000000000000010 /* PlaylistRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* PlaylistRepository.swift */; };
 		100000000000000000000011 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* PlaylistDetailView.swift */; };
 		100000000000000000000012 /* logo.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000013 /* logo.jpg */; };
+		100000000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,7 +46,7 @@
 		200000000000000000000005 /* AudioPlaybackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackController.swift; sourceTree = "<group>"; };
 		200000000000000000000006 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		200000000000000000000007 /* BackupDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupDocument.swift; sourceTree = "<group>"; };
-		200000000000000000000008 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		200000000000000000000008 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		200000000000000000000009 /* PlayerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerDetailView.swift; sourceTree = "<group>"; };
 		20000000000000000000000A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20000000000000000000000B /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
@@ -57,6 +58,7 @@
 		200000000000000000000011 /* JasListen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JasListen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000012 /* JasListenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JasListenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000013 /* logo.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = logo.jpg; sourceTree = "<group>"; };
+		200000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000001 /* JasListenApp.swift */,
+				200000000000000000000014 /* Assets.xcassets */,
 				700000000000000000000005 /* Models */,
 				700000000000000000000006 /* Services */,
 				700000000000000000000007 /* Views */,
@@ -144,7 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000007 /* BackupDocument.swift */,
-				200000000000000000000008 /* LibraryView.swift */,
+				200000000000000000000008 /* RootView.swift */,
 				200000000000000000000009 /* PlayerDetailView.swift */,
 				20000000000000000000000F /* PlaylistDetailView.swift */,
 				20000000000000000000000C /* MacPlaybackKeys.swift */,
@@ -242,6 +245,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000012 /* logo.jpg in Resources */,
+				100000000000000000000014 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,7 +271,7 @@
 				100000000000000000000006 /* BackupService.swift in Sources */,
 				10000000000000000000000C /* BackupFormat.swift in Sources */,
 				100000000000000000000007 /* BackupDocument.swift in Sources */,
-				100000000000000000000008 /* LibraryView.swift in Sources */,
+				100000000000000000000008 /* RootView.swift in Sources */,
 				100000000000000000000009 /* PlayerDetailView.swift in Sources */,
 				10000000000000000000000E /* MacPlaybackKeys.swift in Sources */,
 				10000000000000000000000F /* Playlist.swift in Sources */,
@@ -324,6 +328,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZX49MLHU3Q;
 				ENABLE_TESTABILITY = YES;
@@ -349,6 +354,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZX49MLHU3Q;
 				GENERATE_INFOPLIST_FILE = NO;

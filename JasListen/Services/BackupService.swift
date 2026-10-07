@@ -13,15 +13,18 @@ enum BackupService {
     /// Builds a native backup archive and returns the temporary file URL.
     ///
     /// The archive is assembled on a background task so a large library keeps
-    /// the interface responsive. Lesson values are snapshotted on the main
-    /// actor so SwiftData models are never touched off the main actor.
+    /// the interface responsive. Lesson and playlist values are snapshotted on
+    /// the main actor so SwiftData models are never touched off the main actor.
     static func makeBackup(
         lessons: [Lesson],
+        playlists: [Playlist] = [],
         audioDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) async throws -> URL {
         let directory = try audioDirectory ?? AudioImportService.audioDirectory(fileManager: fileManager)
         let records = lessons.map(SourceLesson.init)
+        let lessonIDs = Set(records.map(\.id))
+        let playlistRecords = playlists.map { SourcePlaylist($0, lessonIDs: lessonIDs) }
         return try await Task.detached(priority: .userInitiated) {
             let staging = fileManager.temporaryDirectory
                 .appendingPathComponent("JasListenBackup-\(UUID().uuidString)", isDirectory: true)
@@ -54,7 +57,8 @@ enum BackupService {
                 format: BackupManifest.currentFormat,
                 version: BackupManifest.currentVersion,
                 exportedAt: .now,
-                lessons: entries
+                lessons: entries,
+                playlists: playlistRecords.map(\.record)
             )
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -100,7 +104,13 @@ enum BackupService {
             var moved: [URL] = []
             do {
                 let staged = try move(lessons, into: library, fileManager: fileManager, moved: &moved)
-                return try commit(staged, context: context, audioDirectory: library, fileManager: fileManager)
+                return try commit(
+                    staged,
+                    context: context,
+                    playlists: parsed.playlists,
+                    audioDirectory: library,
+                    fileManager: fileManager
+                )
             } catch {
                 moved.forEach { try? fileManager.removeItem(at: $0) }
                 throw error
@@ -108,21 +118,29 @@ enum BackupService {
         }
     }
 
-    /// Merges staged lessons into the library, rewrites colliding IDs, and
-    /// rolls inserted models back if the save fails.
+    /// Merges staged lessons and playlists into the library, rewrites colliding
+    /// IDs, and rolls inserted models back if the save fails.
+    ///
+    /// Lesson IDs are remapped first, and restored playlist membership follows
+    /// that mapping so a playlist never points at a lesson the merge replaced.
+    /// A playlist ID that collides gets a new ID; playlist names are not merged,
+    /// matching the lesson rule that a restore never overwrites what is there.
     static func commit(
         _ staged: [StagedLesson],
         context: ModelContext,
+        playlists stagedPlaylists: [StagedPlaylist] = [],
         audioDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> Int {
         guard !staged.isEmpty else { throw BackupError.invalidManifest }
         let existing = try context.fetch(FetchDescriptor<Lesson>())
-        let assigned = BackupParser.assignIDs(staged, existingIDs: Set(existing.map(\.id)))
+        let (assigned, remapping) = BackupParser.assignIDsAndRemap(staged, existingIDs: Set(existing.map(\.id)))
         let audioDirectory = try audioDirectory ?? AudioImportService.audioDirectory(fileManager: fileManager)
         var createdFiles: [URL] = []
         var newLessons: [Lesson] = []
+        var newPlaylists: [Playlist] = []
         do {
+            var lessonsByID: [UUID: Lesson] = [:]
             for item in assigned {
                 let id = item.id
                 let ext = item.source.pathExtension.isEmpty ? "mp3" : item.source.pathExtension
@@ -144,11 +162,43 @@ enum BackupService {
                 )
                 context.insert(lesson)
                 newLessons.append(lesson)
+                lessonsByID[id] = lesson
             }
+
+            var usedPlaylistIDs = Set(try context.fetch(FetchDescriptor<Playlist>()).map(\.id))
+            for stagedPlaylist in stagedPlaylists {
+                var id = stagedPlaylist.id
+                while usedPlaylistIDs.contains(id) { id = UUID() }
+                usedPlaylistIDs.insert(id)
+                let playlist = Playlist(
+                    id: id,
+                    name: stagedPlaylist.name,
+                    createdAt: stagedPlaylist.createdAt,
+                    updatedAt: stagedPlaylist.updatedAt
+                )
+                context.insert(playlist)
+                newPlaylists.append(playlist)
+                for (position, archiveLessonID) in stagedPlaylist.lessonIDs.enumerated() {
+                    guard let mappedID = remapping[archiveLessonID],
+                          let lesson = lessonsByID[mappedID] else { continue }
+                    let item = PlaylistItem(position: position, lesson: lesson)
+                    context.insert(item)
+                    item.playlist = playlist
+                    // Setting the child side maintains the inverse, but appending
+                    // is done explicitly so the running order is visible to this
+                    // context right away. The identity check mirrors the playlist
+                    // repository and keeps the item from being added twice.
+                    if !playlist.items.contains(where: { $0 === item }) {
+                        playlist.items.append(item)
+                    }
+                }
+            }
+
             try context.save()
             return newLessons.count
         } catch {
             for lesson in newLessons { context.delete(lesson) }
+            for playlist in newPlaylists { context.delete(playlist) }
             context.rollback()
             createdFiles.forEach { try? fileManager.removeItem(at: $0) }
             throw error
@@ -227,6 +277,35 @@ private struct SourceLesson: Sendable {
         createdAt = lesson.createdAt
         lastPlayedAt = lesson.lastPlayedAt
         lastPosition = lesson.lastPosition
+    }
+}
+
+/// Sendable snapshot of a playlist and its running order so archive building can
+/// run off the main actor. Only lessons the backup itself carries are kept, so a
+/// stale placement can never point outside the archive.
+private struct SourcePlaylist: Sendable {
+    let id: UUID
+    let name: String
+    let createdAt: Date
+    let updatedAt: Date
+    let lessonIDs: [UUID]
+
+    init(_ playlist: Playlist, lessonIDs: Set<UUID>) {
+        id = playlist.id
+        name = playlist.name
+        createdAt = playlist.createdAt
+        updatedAt = playlist.updatedAt
+        self.lessonIDs = playlist.orderedItems.compactMap(\.lesson?.id).filter { lessonIDs.contains($0) }
+    }
+
+    var record: BackupPlaylistRecord {
+        BackupPlaylistRecord(
+            id: id,
+            name: name,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            lessonIDs: lessonIDs
+        )
     }
 }
 

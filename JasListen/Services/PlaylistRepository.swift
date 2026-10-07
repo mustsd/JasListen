@@ -76,7 +76,14 @@ enum PlaylistOrdering {
 protocol PlaylistRepository {
     func allPlaylists() throws -> [Playlist]
     func playlist(id: UUID) throws -> Playlist?
+    func playlist(named name: String) throws -> Playlist?
     @discardableResult func create(named name: String) throws -> Playlist
+    /// Returns the playlist with this name, creating it when it does not exist.
+    @discardableResult func ensurePlaylist(named name: String) throws -> Playlist
+    /// Places every lesson that is in no playlist into the named playlist,
+    /// oldest first, creating the playlist when needed. Returns how many
+    /// lessons were newly filed.
+    @discardableResult func fileUnfiledLessons(in name: String) throws -> Int
     func rename(_ playlist: Playlist, to name: String) throws
     func remove(_ playlist: Playlist) throws
     @discardableResult func add(_ lessons: [Lesson], to playlist: Playlist) throws -> Int
@@ -84,6 +91,13 @@ protocol PlaylistRepository {
     func remove(_ lesson: Lesson, from playlists: [Playlist]) throws
     func move(from offsets: IndexSet, to destination: Int, in playlist: Playlist) throws
     func save() throws
+}
+
+/// The playlist that holds lessons no playlist has claimed yet. It is the
+/// replacement for the old flat lesson list: nothing may become unreachable, so
+/// an unfiled lesson is always placed here instead of disappearing.
+enum PlaylistInbox {
+    static let name = "Imported"
 }
 
 /// SwiftData-backed playlist management.
@@ -102,6 +116,33 @@ struct SwiftDataPlaylistRepository: PlaylistRepository {
         var descriptor = FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
+    }
+
+    /// Matches a trimmed, case-insensitive name so `imported` and `Imported`
+    /// are the same bucket.
+    func playlist(named name: String) throws -> Playlist? {
+        let wanted = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !wanted.isEmpty else { return nil }
+        return try allPlaylists().first { $0.name.localizedStandardCompare(wanted) == .orderedSame }
+    }
+
+    @discardableResult
+    func ensurePlaylist(named name: String) throws -> Playlist {
+        if let existing = try playlist(named: name) { return existing }
+        return try create(named: name)
+    }
+
+    @discardableResult
+    func fileUnfiledLessons(in name: String = PlaylistInbox.name) throws -> Int {
+        let lessons = try context.fetch(
+            FetchDescriptor<Lesson>(sortBy: [SortDescriptor(\.createdAt, order: .forward)])
+        )
+        guard !lessons.isEmpty else { return 0 }
+        let placed = Set(try context.fetch(FetchDescriptor<PlaylistItem>()).compactMap { $0.lesson?.id })
+        let unfiled = lessons.filter { !placed.contains($0.id) }
+        guard !unfiled.isEmpty else { return 0 }
+        let inbox = try ensurePlaylist(named: name)
+        return try add(unfiled, to: inbox)
     }
 
     @discardableResult

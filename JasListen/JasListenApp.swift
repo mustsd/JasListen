@@ -19,9 +19,9 @@ struct JasListenApp: App {
     var body: some Scene {
         WindowGroup {
             if let container {
-                LibraryView().modelContainer(container)
+                RootView().modelContainer(container)
             } else {
-                ContentUnavailableView("Library unavailable", systemImage: "externaldrive.badge.exclamationmark", description: Text("JasListen could not open local lesson storage. Your audio files have not been deleted. \(startupError ?? "")"))
+                ContentUnavailableView("Lessons unavailable", systemImage: "externaldrive.badge.exclamationmark", description: Text("JasListen could not open local lesson storage. Your audio files have not been deleted. \(startupError ?? "")"))
             }
         }
     }
